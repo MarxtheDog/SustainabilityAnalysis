@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sun Oct 31 15:12:14 2021
-
-@author: johnt
-"""
+import os
+import sys
+abspath = os.path.abspath(sys.argv[0])
+dname = os.path.dirname(abspath)
+os.chdir(dname)
 
 from assignment_B_model import logistic
 from assignment_B_model import calibration
@@ -14,6 +13,8 @@ import math
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
 from sklearn.model_selection import KFold
+import seaborn as sns
+
 
 #%% functions
 # function to calculated percentage bias
@@ -109,13 +110,19 @@ def fold_logistic(time, value, folds=5):
 
             
 #%% Import Data
-excel = pd.read_excel("Goal_6.1.1_All_Countries.xlsx","Goal6")
-excel = excel[~excel['Location'].isin(['URBAN','RURAL'])]
+excel1 = pd.read_excel("Goal_6.1.1_All_Countries.xlsx","Goal6")
+excel = excel1.groupby(['SeriesCode','GeoAreaName','TimePeriod']).agg({'Value': 'mean'}).reset_index()
+excel = excel.convert_dtypes()
+excel.dtypes
 
-metric = 'Proportion of population using safely managed drinking water services, by urban/rural (%)'
 
-#Data selection - 'Number of people affected by disaster (number)'
-excel_affected = excel[excel["SeriesDescription"]==metric]
+excel2 = pd.read_excel("Population.xlsx","ESTIMATES")
+excel2 = excel2[excel2['Type'].isin(['Country/Area'])]
+
+code = 'SH_H2O_SAFE'
+
+#Data selection - Proportion of population using safely managed drinking water services, by urban/rural (%)'
+excel_affected = excel[excel["SeriesCode"]==code]
 # create pivot table of country vs year for number of people affected by disaster
 pivot = excel_affected.pivot(index="GeoAreaName", columns="TimePeriod", values="Value")
 
@@ -174,7 +181,7 @@ for country in excel_affected["GeoAreaName"].unique():
         r2_value, pbias_value, nrmse_value = evaluation(y,lf_list)
         
         if math.isnan(r2_value):
-            print("->{} has {} datapoints, not enough for regression".format(country,len(lf_list)))
+            print("->{} has {} datapoints, which show no increase or decrease in value thus regression not possible".format(country,len(lf_list)))
             start = K = x_peak = r = lf_2030 = lf_list = r2_value = pbias_value = nrmse_value = math.nan 
     except RuntimeError:
         print("->No solution for logistic found for {}".format(country))
@@ -198,10 +205,13 @@ for country in excel_affected["GeoAreaName"].unique():
     fold_results = fold_logistic(x,y,5)
     logistic_results[country]['Fold results'] = fold_results
     
+    resultsofCountry = pd.DataFrame.from_dict(logistic_results, orient='index')
+    resultsofCountry.reset_index(level=0, inplace=True)
+    
 #%%
 
 #list of countries for plotting
-country_plot =  ["Slovakia", "Slovenia"]
+country_plot =  ["India", "Bangladesh"]
 # list of tableau colours 
 tableau10 = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 
@@ -218,7 +228,66 @@ for idx,country in enumerate(country_plot):
     ax.plot(time,obs, color = tableau10[idx*2], label="{}: Observed".format(country) )
     ax.plot(time,sim, color = tableau10[idx*2+1], label="{}: Simulated".format(country) )
     
-    
-plt.legend()    
+plt.xticks(rotation=45)    
+plt.legend()   
+plt.xticks(range(2000, 2021)) 
 plt.xlabel("Year", fontsize=10)  
-plt.ylabel(metric, fontsize=12)
+plt.ylabel("Proportion of population using safely managed drinking water services", fontsize=12)
+plt.savefig('CountryComparisson.png',bbox_inches='tight')
+plt.show()
+plt.close()
+
+#%% 30 Populous Countries
+excel2cor = excel2.convert_dtypes()
+top30 = excel2cor.nlargest(30, 'Pop')
+
+Map= resultsofCountry[['index','2030 Logistic','Growth Rate']]
+Map = Map.rename(columns={"index": "Country"})
+WorldCheck = pd.merge(Map, top30, how='inner', on='Country' )
+
+data = WorldCheck.groupby("Pop").size()
+pal = sns.color_palette("rocket", len(data))
+rank = data.argsort().argsort()
+
+ax1 = sns.barplot(data = WorldCheck, x = "Country", y = "Pop", palette = np.array(pal[::-1])[rank], label = False)
+plt.ylabel("Population (millions)", fontsize=12)
+ax1.set_xticklabels(ax1.get_xticklabels(),rotation = 90)
+ax2 = ax1.twinx()
+ax2 = sns.scatterplot(data=WorldCheck, x = "Country", y="Growth Rate", hue="2030 Logistic", size = "2030 Logistic", palette = 'mako',  ax =ax2)
+ax2.legend(fontsize = 6, \
+               bbox_to_anchor= (1.05, 1), \
+               title="% Acheiving SDG Goal 6.1.1. by 2030", \
+               title_fontsize = 8, \
+               shadow = True, \
+               facecolor = 'white');
+plt.savefig('Country_Pop_with_SDG_Growth_and_2030_Projection.png',bbox_inches='tight')
+plt.show()
+plt.close()
+
+
+
+#%%
+#GUI
+"""
+from tkinter import *
+import tkinter.messagebox
+  
+# create a tkinter root window
+root = tkinter.Tk()
+  
+# root window title and dimension
+root.title("When you press a button the message will pop up")
+root.geometry('500x300')
+  
+# Create a messagebox showinfo
+  
+def onClick():
+    tkinter.messagebox.showinfo("Welcome to GFG.",  "Hi I'm your message")
+  
+# Create a Button
+button = Button(root, text="Click Me", command=onClick, height=5, width=10)
+  
+# Set the position of button on the top of window.
+button.pack(side='bottom')
+root.mainloop()
+"""
