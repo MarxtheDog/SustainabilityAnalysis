@@ -17,3 +17,4 @@ Contributing
 Credits
 •
 Licence
+Documentation of Functions
